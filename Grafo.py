@@ -2,7 +2,7 @@
 # Instalação das Bibliotecas Necessárias
 # ================================
 
-# Caso ainda não tenha as bibliotecas instaladas, descomente as linhas abaixo:
+# Instalar BBTC
 # !pip install networkx matplotlib pandas seaborn
 
 # ================================
@@ -418,7 +418,7 @@ for estacao in estacoes_baixa_centralidade:
     print(f"- {estacao}")
 
 # ================================
-# Considerações Finais
+# END
 # ================================
 
 print("\nAnálise concluída com sucesso.")
