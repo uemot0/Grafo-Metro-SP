@@ -1,9 +1,8 @@
 # ================================
 # Instalação das Bibliotecas Necessárias
 # ================================
-
-# Instalar BBTC
 # !pip install networkx matplotlib pandas seaborn
+# !pip install python-louvain
 
 # ================================
 # Importação das Bibliotecas
@@ -13,12 +12,18 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import matplotlib.patches as mpatches
+import statistics
+
+# Ajuste para a biblioteca de modularidade (python-louvain)
+try:
+    import community.community_louvain as community_louvain
+    modularidade_disponivel = True
+except ImportError:
+    modularidade_disponivel = False
 
 # ================================
 # Passo 1: Organização dos Dados das Estações
 # ================================
-
-# Dados das estações organizados por linha e ordem
 estacoes_data = [
     # Linha 1 - Azul
     {"nome": "Jabaquara", "linha": "Linha 1 - Azul", "ordem": 1},
@@ -138,91 +143,68 @@ print(duplicatas[['nome', 'linha']].sort_values('nome').to_string(index=False))
 # ================================
 # Passo 2: Construção do Grafo
 # ================================
-
-# Inicializa o grafo
 G = nx.Graph()
 
-# Adiciona os nós (estações) com atributos de linha
+# Adicionar nós
 for idx, row in estacoes_df.iterrows():
     nome = row['nome']
     linha = row['linha']
 
     if G.has_node(nome):
-        # Se a estação já existe, adiciona a linha à lista de linhas
         if linha not in G.nodes[nome]['linha']:
             G.nodes[nome]['linha'].append(linha)
     else:
-        # Caso contrário, cria a estação com a lista de linhas
         G.add_node(nome, linha=[linha])
 
-# Adiciona as arestas baseadas nas conexões das linhas
+# Adicionar arestas
 linhas = estacoes_df.groupby('linha')
-
 for linha, group in linhas:
-    # Ordena as estações pela ordem na linha
     estacoes = group.sort_values('ordem')['nome'].tolist()
-    # Adiciona as arestas sequenciais
     for i in range(len(estacoes) - 1):
         origem = estacoes[i]
         destino = estacoes[i + 1]
-        # Adiciona a aresta com atributos de linha
         if G.has_edge(origem, destino):
-            # Se a aresta já existe, adiciona a linha à lista de linhas
             if linha not in G[origem][destino]['linha']:
                 G[origem][destino]['linha'].append(linha)
         else:
             G.add_edge(origem, destino, linha=[linha])
 
-# Verifica o grafo
 print(f"\nGrafo criado com {G.number_of_nodes()} nós e {G.number_of_edges()} arestas.")
 
 # ================================
 # Passo 3: Atribuição de Pesos às Arestas
 # ================================
-
-# Calcula os graus das estações
 graus = dict(G.degree())
-
-# Atualiza os pesos das arestas com base no número de conexões das estações
 for u, v, data in G.edges(data=True):
     peso = graus[u] + graus[v]
     G[u][v]['peso'] = peso
 
-# Opcional: Verificar alguns pesos
 print("\nExemplos de pesos das arestas:")
 for i, (u, v, data) in enumerate(G.edges(data=True)):
     if i < 5:
         print(f"{u} - {v}: Peso = {data['peso']}")
 
 # ================================
-# Passo 4: Cálculo de Métricas de Centralidade
+# Passo 4: Cálculo de Métricas de Centralidade (já existentes)
 # ================================
-
-# Cálculo da Centralidade de Grau
 grau = nx.degree_centrality(G)
 grau_df = pd.DataFrame.from_dict(grau, orient='index', columns=['Grau_Centralidade'])
 
-# Cálculo da Centralidade de Betweenness
 betweenness = nx.betweenness_centrality(G, weight='peso')
 betweenness_df = pd.DataFrame.from_dict(betweenness, orient='index', columns=['Betweenness_Centralidade'])
 
-# Cálculo da Centralidade de Closeness (Unweighted)
 closeness = nx.closeness_centrality(G)
 closeness_df = pd.DataFrame.from_dict(closeness, orient='index', columns=['Closeness_Centralidade'])
 
-# Combinação das métricas em um único DataFrame
 metrics_df = grau_df.join(betweenness_df).join(closeness_df)
 metrics_df = metrics_df.sort_values(by='Betweenness_Centralidade', ascending=False)
 
-# Exibição das 10 estações com maior centralidade de betweenness
 print("\nTop 10 Estações por Centralidade de Betweenness:")
 print(metrics_df['Betweenness_Centralidade'].head(10))
 
 # ================================
 # Passo 5: Visualização do Grafo
 # ================================
-
-# Definição das cores para cada linha
 linha_cores = {
     "Linha 1 - Azul": "#0041C2",
     "Linha 2 - Verde": "#00923F",
@@ -232,26 +214,20 @@ linha_cores = {
     "Linha 15 - Prata": "#C0C0C0"
 }
 
-# Função para determinar a cor de uma aresta com base nas linhas que conecta
 def get_edge_color(linhas):
-    # Prioriza a primeira linha na lista para a cor
     return linha_cores.get(linhas[0], "gray")
 
-# Função para determinar se uma estação é de transferência
 def is_transfer_station(linhas):
     return len(linhas) > 1
 
-# Adiciona um atributo de transferência para os nós
 for node in G.nodes():
     G.nodes[node]['transfer'] = is_transfer_station(G.nodes[node]['linha'])
 
-# Obter o layout do grafo com 'k' menor para arestas mais curtas
-pos = nx.spring_layout(G, k=0.3, seed=42)  # 'k' controla o espaçamento; menor k = arestas mais curtas
+pos = nx.spring_layout(G, k=0.3, seed=42)
 
-plt.figure(figsize=(25, 25))  # Aumenta o tamanho da figura para melhor visualização
+plt.figure(figsize=(25, 25))
 plt.title("Grafo do Metrô de São Paulo", fontsize=25)
 
-# Desenha as arestas
 for edge in G.edges(data=True):
     linhas = edge[2]['linha']
     color = get_edge_color(linhas)
@@ -264,12 +240,8 @@ for edge in G.edges(data=True):
         alpha=0.7
     )
 
-# Desenha os nós
-# Tamanhos de nós baseados no número de linhas que a estação pertence (maior para mais linhas)
-num_linhas = {node: len(data['linha']) for node, data in G.nodes(data=True)}
-node_sizes = [800 * num_linhas[node] for node in G.nodes()]  # Ajuste o multiplicador conforme necessário
-
-# Cores dos nós: destacando estações de transferência
+num_linhas = {node: len(data['linha']) for node, data in G.nodes(data=True)]
+node_sizes = [800 * num_linhas[node] for node in G.nodes()]
 node_colors = ['red' if G.nodes[node]['transfer'] else 'white' for node in G.nodes()]
 
 nx.draw_networkx_nodes(
@@ -282,7 +254,6 @@ nx.draw_networkx_nodes(
     alpha=0.9
 )
 
-# Adiciona rótulos para todas as estações
 labels = {}
 for node, data in G.nodes(data=True):
     if data['transfer']:
@@ -294,19 +265,15 @@ nx.draw_networkx_labels(
     G,
     pos,
     labels,
-    font_size=8,  # Ajustado para melhor cabimento
+    font_size=8,
     font_color='black'
 )
 
-# Criar uma legenda personalizada
-# Legenda para as linhas
 legenda_linhas = [mpatches.Patch(color=cor, label=linha) for linha, cor in linha_cores.items()]
-# Legenda para estações de transferência
 legenda_transfer = mpatches.Patch(color='red', label='Estação com Baldiação')
 legendas = legenda_linhas + [legenda_transfer]
 
 plt.legend(handles=legendas, loc='upper right', fontsize='large', title='Linhas do Metrô e Transferências')
-
 plt.axis('off')
 plt.tight_layout()
 plt.show()
@@ -314,66 +281,28 @@ plt.show()
 # ================================
 # Passo 6: Criação de Gráficos das Métricas de Centralidade
 # ================================
-
-# Configuração do estilo
 sns.set(style="whitegrid")
 
-# Top 10 Estações por Centralidade de Betweenness
-top10_betweenness = metrics_df['Betweenness_Centralidade'].nlargest(10)
+# Função para criar gráfico de barras de uma métrica
+def plot_metric_top10(series, title, ylabel, palette="viridis"):
+    top10 = series.nlargest(10)
+    plt.figure(figsize=(16, 8))
+    sns.barplot(x=top10.index, y=top10.values, palette=palette)
+    plt.title(title, fontsize=18)
+    plt.xlabel("Estações", fontsize=14)
+    plt.ylabel(ylabel, fontsize=14)
+    plt.xticks(rotation=45, fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.tight_layout()
+    plt.show()
 
-plt.figure(figsize=(16, 8))
-sns.barplot(
-    x=top10_betweenness.index,
-    y=top10_betweenness.values,
-    palette="viridis"
-)
-plt.title("Top 10 Estações por Centralidade de Betweenness", fontsize=18)
-plt.xlabel("Estações", fontsize=14)
-plt.ylabel("Centralidade de Betweenness", fontsize=14)
-plt.xticks(rotation=45, fontsize=12)
-plt.yticks(fontsize=12)
-plt.tight_layout()
-plt.show()
-
-# Top 10 Estações por Centralidade de Closeness
-top10_closeness = metrics_df['Closeness_Centralidade'].nlargest(10)
-
-plt.figure(figsize=(16, 8))
-sns.barplot(
-    x=top10_closeness.index,
-    y=top10_closeness.values,
-    palette="magma"
-)
-plt.title("Top 10 Estações por Centralidade de Closeness", fontsize=18)
-plt.xlabel("Estações", fontsize=14)
-plt.ylabel("Centralidade de Closeness", fontsize=14)
-plt.xticks(rotation=45, fontsize=12)
-plt.yticks(fontsize=12)
-plt.tight_layout()
-plt.show()
-
-# Top 10 Estações por Grau de Centralidade
-top10_grau = metrics_df['Grau_Centralidade'].nlargest(10)
-
-plt.figure(figsize=(16, 8))
-sns.barplot(
-    x=top10_grau.index,
-    y=top10_grau.values,
-    palette="coolwarm"
-)
-plt.title("Top 10 Estações por Grau de Centralidade", fontsize=18)
-plt.xlabel("Estações", fontsize=14)
-plt.ylabel("Grau de Centralidade", fontsize=14)
-plt.xticks(rotation=45, fontsize=12)
-plt.yticks(fontsize=12)
-plt.tight_layout()
-plt.show()
+plot_metric_top10(metrics_df['Betweenness_Centralidade'], "Top 10 Estações por Centralidade de Betweenness", "Centralidade de Betweenness", "viridis")
+plot_metric_top10(metrics_df['Closeness_Centralidade'], "Top 10 Estações por Centralidade de Closeness", "Centralidade de Closeness", "magma")
+plot_metric_top10(metrics_df['Grau_Centralidade'], "Top 10 Estações por Grau de Centralidade", "Grau de Centralidade", "coolwarm")
 
 # ================================
 # Passo 7: Análises Adicionais
 # ================================
-
-# Exemplo 1: Rota Mais Curta de "Jabaquara" para "São Mateus"
 origem = "Jabaquara"
 destino = "São Mateus"
 
@@ -386,39 +315,137 @@ try:
 except nx.NetworkXNoPath:
     print(f"Não há caminho entre {origem} e {destino}.")
 
-# Exemplo 2: Estação com Maior Centralidade de Betweenness
 max_betweenness = betweenness_df['Betweenness_Centralidade'].idxmax()
 print(f"\nEstação com maior centralidade de betweenness: {max_betweenness}")
 print(f"Valor: {betweenness_df.loc[max_betweenness, 'Betweenness_Centralidade']}")
 
-# Exemplo 3: Estações com Menor Grau de Centralidade
 min_grau = grau_df['Grau_Centralidade'].nsmallest(5)
 print("\n5 Estações com menor grau de centralidade:")
 print(min_grau)
 
-# ================================
-# Análises Adicionais: Resiliência e Expansão
-# ================================
-
-# Análise de Resiliência: Remoção de uma estação crítica
-estacao_remover = max_betweenness  # Remover a estação com maior betweenness
+estacao_remover = max_betweenness
 G_resiliente = G.copy()
 G_resiliente.remove_node(estacao_remover)
 
-# Verificar se a remoção impacta significativamente a conectividade
 num_componentes_original = nx.number_connected_components(G)
 num_componentes_resiliente = nx.number_connected_components(G_resiliente)
 print(f"\nNúmero de Componentes Conectados antes da remoção: {num_componentes_original}")
 print(f"Número de Componentes Conectados após a remoção de {estacao_remover}: {num_componentes_resiliente}")
 
-# Sugestão de Expansão: Identificar estações com baixa centralidade para possíveis melhorias
 estacoes_baixa_centralidade = metrics_df.sort_values('Betweenness_Centralidade').head(5).index.tolist()
 print("\nEstações com baixa centralidade de betweenness (sugestões para expansão):")
 for estacao in estacoes_baixa_centralidade:
     print(f"- {estacao}")
 
 # ================================
-# END
+# Métricas adicionais solicitadas
 # ================================
+grau_medio = sum(dict(G.degree()).values()) / G.number_of_nodes()
+
+# Diâmetro, Raio (considerando componente maior se não for conectado)
+if nx.is_connected(G):
+    diametro = nx.diameter(G)
+    raio = nx.radius(G)
+    avg_shortest_path_length = nx.average_shortest_path_length(G, weight='peso')
+else:
+    componentes = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+    maior_componente = max(componentes, key=lambda c: c.number_of_nodes())
+    diametro = nx.diameter(maior_componente)
+    raio = nx.radius(maior_componente)
+    avg_shortest_path_length = nx.average_shortest_path_length(maior_componente, weight='peso')
+
+densidade = nx.density(G)
+
+if modularidade_disponivel:
+    partition = community_louvain.best_partition(G)
+    modularidade = community_louvain.modularity(partition, G)
+else:
+    modularidade = None
+
+pagerank = nx.pagerank(G, alpha=0.85)
+pagerank_df = pd.DataFrame.from_dict(pagerank, orient='index', columns=['PageRank'])
+
+num_componentes = nx.number_connected_components(G)
+coeficiente_clusterizacao = nx.average_clustering(G)
+
+# Métricas adicionais:
+# 1. Transitividade (similar ao coef. de clustering global)
+transitividade = nx.transitivity(G)
+
+# 2. Eccentricidade dos nós (somente no maior componente)
+componentes = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+maior_componente = max(componentes, key=lambda c: c.number_of_nodes())
+ecc = nx.eccentricity(maior_componente)
+eccentricidade_media = statistics.mean(ecc.values())
+
+# 3. Degree Assortativity (Mede a correlação dos graus dos nós que se ligam)
+degree_assortativity = nx.degree_assortativity_coefficient(G)
+
+print("\n===== Métricas Adicionais =====")
+print(f"Grau Médio: {grau_medio}")
+print(f"Diametro: {diametro}")
+print(f"Raio: {raio}")
+print(f"Densidade do Grafo: {densidade}")
+print(f"Transitividade: {transitividade}")
+print(f"Eccentricidade Média (Maior Componente): {eccentricidade_media}")
+print(f"Degree Assortativity: {degree_assortativity}")
+print(f"Comprimento Médio dos Caminhos (Maior Componente): {avg_shortest_path_length}")
+if modularidade is not None:
+    print(f"Modularidade: {modularidade}")
+else:
+    print("Modularidade: Não foi possível calcular (biblioteca python-louvain não instalada ou erro na importação).")
+print(f"Número de Componentes Conectados: {num_componentes}")
+print(f"Coeficiente de Clusterização Médio: {coeficiente_clusterizacao}")
+
+print("\nTop 10 Estações por PageRank:")
+print(pagerank_df['PageRank'].nlargest(10))
+
+# ================================
+# Criação de Gráficos de Distribuição (ex: distribuição de graus e centralidades)
+# ================================
+degree_values = [G.degree(n) for n in G.nodes()]
+plt.figure(figsize=(10, 6))
+sns.histplot(degree_values, kde=True, color='blue')
+plt.title("Distribuição de Grau das Estações", fontsize=16)
+plt.xlabel("Grau", fontsize=14)
+plt.ylabel("Frequência", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# Distribuição da Centralidade de Betweenness
+plt.figure(figsize=(10, 6))
+sns.histplot(metrics_df['Betweenness_Centralidade'], kde=True, color='green')
+plt.title("Distribuição da Centralidade de Betweenness", fontsize=16)
+plt.xlabel("Betweenness", fontsize=14)
+plt.ylabel("Frequência", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# Distribuição da Centralidade de Closeness
+plt.figure(figsize=(10, 6))
+sns.histplot(metrics_df['Closeness_Centralidade'], kde=True, color='purple')
+plt.title("Distribuição da Centralidade de Closeness", fontsize=16)
+plt.xlabel("Closeness", fontsize=14)
+plt.ylabel("Frequência", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# Distribuição da Centralidade de Grau
+plt.figure(figsize=(10, 6))
+sns.histplot(metrics_df['Grau_Centralidade'], kde=True, color='red')
+plt.title("Distribuição da Centralidade de Grau", fontsize=16)
+plt.xlabel("Grau de Centralidade", fontsize=14)
+plt.ylabel("Frequência", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# Distribuição do PageRank
+plt.figure(figsize=(10, 6))
+sns.histplot(pagerank_df['PageRank'], kde=True, color='orange')
+plt.title("Distribuição do PageRank", fontsize=16)
+plt.xlabel("PageRank", fontsize=14)
+plt.ylabel("Frequência", fontsize=14)
+plt.tight_layout()
+plt.show()
 
 print("\nAnálise concluída com sucesso.")
