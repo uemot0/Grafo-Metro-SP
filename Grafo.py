@@ -185,7 +185,7 @@ for i, (u, v, data) in enumerate(G.edges(data=True)):
         print(f"{u} - {v}: Peso = {data['peso']}")
 
 # ================================
-# Passo 4: Cálculo de Métricas de Centralidade (já existentes)
+# Passo 4: Cálculo de Métricas de Centralidade
 # ================================
 grau = nx.degree_centrality(G)
 grau_df = pd.DataFrame.from_dict(grau, orient='index', columns=['Grau_Centralidade'])
@@ -240,7 +240,7 @@ for edge in G.edges(data=True):
         alpha=0.7
     )
 
-num_linhas = {node: len(data['linha']) for node, data in G.nodes(data=True)]
+num_linhas = {node: len(data['linha']) for node, data in G.nodes(data=True)}
 node_sizes = [800 * num_linhas[node] for node in G.nodes()]
 node_colors = ['red' if G.nodes[node]['transfer'] else 'white' for node in G.nodes()]
 
@@ -338,7 +338,7 @@ for estacao in estacoes_baixa_centralidade:
     print(f"- {estacao}")
 
 # ================================
-# Métricas adicionais solicitadas
+# Métricas adicionais
 # ================================
 grau_medio = sum(dict(G.degree()).values()) / G.number_of_nodes()
 
@@ -369,16 +369,11 @@ num_componentes = nx.number_connected_components(G)
 coeficiente_clusterizacao = nx.average_clustering(G)
 
 # Métricas adicionais:
-# 1. Transitividade (similar ao coef. de clustering global)
 transitividade = nx.transitivity(G)
-
-# 2. Eccentricidade dos nós (somente no maior componente)
 componentes = [G.subgraph(c).copy() for c in nx.connected_components(G)]
 maior_componente = max(componentes, key=lambda c: c.number_of_nodes())
 ecc = nx.eccentricity(maior_componente)
 eccentricidade_media = statistics.mean(ecc.values())
-
-# 3. Degree Assortativity (Mede a correlação dos graus dos nós que se ligam)
 degree_assortativity = nx.degree_assortativity_coefficient(G)
 
 print("\n===== Métricas Adicionais =====")
@@ -400,8 +395,11 @@ print(f"Coeficiente de Clusterização Médio: {coeficiente_clusterizacao}")
 print("\nTop 10 Estações por PageRank:")
 print(pagerank_df['PageRank'].nlargest(10))
 
+# Gráfico dos Top 10 Estações por PageRank
+plot_metric_top10(pagerank_df['PageRank'], "Top 10 Estações por PageRank", "PageRank", "plasma")
+
 # ================================
-# Criação de Gráficos de Distribuição (ex: distribuição de graus e centralidades)
+# Criação de Gráficos de Distribuição
 # ================================
 degree_values = [G.degree(n) for n in G.nodes()]
 plt.figure(figsize=(10, 6))
